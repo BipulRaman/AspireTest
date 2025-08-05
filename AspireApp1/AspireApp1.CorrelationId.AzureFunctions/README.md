@@ -78,6 +78,77 @@ var host = new HostBuilder()
     .Build();
 ```
 
+## ⚡ **Important: Wrapping Required ONLY ONCE Per Function**
+
+**Key Point:** You only need to establish correlation context **once** at the function entry point. After that, correlation ID flows automatically through **everything**:
+
+### ✅ **Automatic Flow After Initial Setup**
+```csharp
+public class OrderFunction : CorrelatedHttpFunction
+{
+    [Function("ProcessOrder")]
+    public async Task<HttpResponseData> ProcessOrder([HttpTrigger] HttpRequestData req)
+    {
+        // ⚠️ WRAP ONCE - Only at function entry point
+        return await ExecuteWithCorrelationAsync(req, async () =>
+        {
+            // ✅ From here, correlation ID flows EVERYWHERE automatically:
+            
+            Logger.LogInformation("Processing order"); // ✅ Automatic
+            
+            // ✅ All nested methods - automatic
+            await ValidateOrder();
+            await ProcessPayment();
+            await UpdateInventory();
+            
+            // ✅ Parallel operations - automatic
+            await Task.WhenAll(
+                SendCustomerEmail(),
+                UpdateAnalytics(),
+                NotifyWarehouse()
+            );
+            
+            // ✅ Even background tasks within function - automatic
+            var backgroundTask = Task.Run(async () => {
+                Logger.LogDebug("Background cleanup"); // ✅ Correlation flows here!
+                await CleanupTempData();
+            });
+            
+            // ✅ HTTP calls - automatic correlation headers
+            await _httpClient.PostAsync("https://api.example.com/notify", content);
+            
+            return await CreateJsonResponseAsync(req, new { Status = "Success" });
+        });
+        // ⚠️ This wrapper above is the ONLY wrapping needed for entire function
+    }
+    
+    // ✅ All these methods automatically have correlation - NO additional wrapping
+    private async Task ValidateOrder()
+    {
+        Logger.LogDebug("Validating..."); // ✅ Correlation automatic
+        await CallValidationService();    // ✅ Correlation automatic
+        await CheckInventory();           // ✅ Correlation automatic
+    }
+    
+    private async Task ProcessPayment()
+    {
+        Logger.LogDebug("Processing payment..."); // ✅ Correlation automatic
+        // No matter how deep the call stack goes - correlation flows automatically
+    }
+}
+```
+
+### 🎯 **What Flows Automatically (No Additional Wrapping)**
+- ✅ **All nested method calls** (no matter how deep)
+- ✅ **All async operations** (`await`, `Task.Run`, `Task.WhenAll`)
+- ✅ **HTTP client calls** (automatic correlation headers)
+- ✅ **Parallel operations** and background tasks within the function
+- ✅ **All logging** (automatic correlation ID inclusion)
+- ✅ **Service calls** and database operations
+- ✅ **Error handling and exceptions**
+
+**Bottom Line:** Establish correlation context **once** at function entry → Everything else flows automatically!
+
 ## Usage Examples
 
 ### HTTP Trigger (Option A: Base Class)
