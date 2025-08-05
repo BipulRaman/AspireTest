@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Http;
 
 namespace AspireApp1.CorrelationId;
 
@@ -24,6 +25,43 @@ public static class CorrelationIdExtensions
         });
 
         return services;
+    }
+
+    /// <summary>
+    /// Adds correlation ID services with HTTP client integration
+    /// </summary>
+    public static IServiceCollection AddCorrelationIdWithHttpClient(this IServiceCollection services)
+    {
+        // Add basic correlation ID services
+        services.AddCorrelationId();
+
+        // Register the HTTP message handler
+        services.AddTransient<CorrelationIdHttpMessageHandler>();
+
+        // Configure default HTTP client with correlation ID support
+        services.AddHttpClient(CorrelationIdHttpClientNames.Default)
+            .AddHttpMessageHandler<CorrelationIdHttpMessageHandler>();
+
+        // Configure named HTTP clients for different scenarios
+        services.AddHttpClient(CorrelationIdHttpClientNames.ExternalApi)
+            .AddHttpMessageHandler<CorrelationIdHttpMessageHandler>();
+
+        services.AddHttpClient(CorrelationIdHttpClientNames.InternalService)
+            .AddHttpMessageHandler<CorrelationIdHttpMessageHandler>();
+
+        // Register the correlated HTTP client service
+        services.AddHttpClient<ICorrelatedHttpClient, CorrelatedHttpClient>(CorrelationIdHttpClientNames.Default)
+            .AddHttpMessageHandler<CorrelationIdHttpMessageHandler>();
+
+        return services;
+    }
+
+    /// <summary>
+    /// Adds correlation ID message handler to a specific HTTP client
+    /// </summary>
+    public static IHttpClientBuilder AddCorrelationId(this IHttpClientBuilder builder)
+    {
+        return builder.AddHttpMessageHandler<CorrelationIdHttpMessageHandler>();
     }
 
     /// <summary>

@@ -1,6 +1,7 @@
 <Solution>
   <Project Path="AspireApp1.ApiService/AspireApp1.ApiService.csproj" />
   <Project Path="AspireApp1.AppHost/AspireApp1.AppHost.csproj" />
+  <Project Path="AspireApp1.CorrelationId.AzureFunctions/AspireApp1.CorrelationId.AzureFunctions.csproj" />
   <Project Path="AspireApp1.CorrelationId/AspireApp1.CorrelationId.csproj" />
   <Project Path="AspireApp1.ServiceDefaults/AspireApp1.ServiceDefaults.csproj" />
   <Project Path="AspireApp1.Web/AspireApp1.Web.csproj" />
