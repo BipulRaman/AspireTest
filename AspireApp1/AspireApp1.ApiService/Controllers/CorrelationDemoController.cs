@@ -17,96 +17,87 @@ public class CorrelationDemoController : ControllerBase
     }
 
     /// <summary>
-    /// Demonstrates basic correlation ID tracking
+    /// Demonstrates basic correlation ID tracking (No wrapper needed!)
     /// </summary>
     [HttpGet("basic")]
     public ActionResult<CorrelationDemo> GetBasic()
     {
         _logger.LogInformation("Basic correlation demo started");
         
-        var result = CorrelationIdHelper.ExecuteWithCorrelationId(_correlationIdService, () =>
+        _logger.LogDebug("Processing basic correlation demo");
+        
+        var result = new CorrelationDemo
         {
-            _logger.LogDebug("Processing basic correlation demo");
-            
-            return new CorrelationDemo
-            {
-                Message = "Basic correlation ID demo",
-                CorrelationId = _correlationIdService.CorrelationId,
-                Timestamp = DateTime.UtcNow,
-                RequestId = HttpContext.TraceIdentifier
-            };
-        });
+            Message = "Basic correlation ID demo",
+            CorrelationId = _correlationIdService.CorrelationId,
+            Timestamp = DateTime.UtcNow,
+            RequestId = HttpContext.TraceIdentifier
+        };
 
         _logger.LogInformation("Basic correlation demo completed");
         return Ok(result);
     }
 
     /// <summary>
-    /// Demonstrates async operations with correlation ID
+    /// Demonstrates async operations with correlation ID (No wrapper needed!)
     /// </summary>
     [HttpGet("async")]
     public async Task<ActionResult<CorrelationDemo>> GetAsync()
     {
         _logger.LogInformation("Async correlation demo started");
         
-        var result = await CorrelationIdHelper.ExecuteWithCorrelationIdAsync(_correlationIdService, async () =>
+        _logger.LogDebug("Processing async correlation demo");
+        
+        // Simulate async work
+        await Task.Delay(100);
+        _logger.LogDebug("Async delay completed");
+        
+        // Call another async method
+        var additionalData = await ProcessAdditionalDataAsync();
+        
+        var result = new CorrelationDemo
         {
-            _logger.LogDebug("Processing async correlation demo");
-            
-            // Simulate async work
-            await Task.Delay(100);
-            _logger.LogDebug("Async delay completed");
-            
-            // Call another async method
-            var additionalData = await ProcessAdditionalDataAsync();
-            
-            return new CorrelationDemo
-            {
-                Message = "Async correlation ID demo",
-                CorrelationId = _correlationIdService.CorrelationId,
-                Timestamp = DateTime.UtcNow,
-                RequestId = HttpContext.TraceIdentifier,
-                AdditionalData = additionalData
-            };
-        });
+            Message = "Async correlation ID demo",
+            CorrelationId = _correlationIdService.CorrelationId,
+            Timestamp = DateTime.UtcNow,
+            RequestId = HttpContext.TraceIdentifier,
+            AdditionalData = additionalData
+        };
 
         _logger.LogInformation("Async correlation demo completed");
         return Ok(result);
     }
 
     /// <summary>
-    /// Demonstrates nested method calls with correlation ID tracking
+    /// Demonstrates nested method calls with correlation ID tracking (No wrapper needed!)
     /// </summary>
     [HttpGet("nested")]
     public async Task<ActionResult<CorrelationDemo>> GetNested()
     {
         _logger.LogInformation("Nested correlation demo started");
         
-        var result = await CorrelationIdHelper.ExecuteWithCorrelationIdAsync(_correlationIdService, async () =>
+        _logger.LogDebug("Level 1: Starting nested operations");
+        
+        var level2Result = await ProcessLevel2Async();
+        var level3Result = ProcessLevel3();
+        
+        _logger.LogDebug("All nested levels completed");
+        
+        var result = new CorrelationDemo
         {
-            _logger.LogDebug("Level 1: Starting nested operations");
-            
-            var level2Result = await ProcessLevel2Async();
-            var level3Result = ProcessLevel3();
-            
-            _logger.LogDebug("All nested levels completed");
-            
-            return new CorrelationDemo
-            {
-                Message = "Nested correlation ID demo",
-                CorrelationId = _correlationIdService.CorrelationId,
-                Timestamp = DateTime.UtcNow,
-                RequestId = HttpContext.TraceIdentifier,
-                AdditionalData = $"Level2: {level2Result}, Level3: {level3Result}"
-            };
-        });
+            Message = "Nested correlation ID demo",
+            CorrelationId = _correlationIdService.CorrelationId,
+            Timestamp = DateTime.UtcNow,
+            RequestId = HttpContext.TraceIdentifier,
+            AdditionalData = $"Level2: {level2Result}, Level3: {level3Result}"
+        };
 
         _logger.LogInformation("Nested correlation demo completed");
         return Ok(result);
     }
 
     /// <summary>
-    /// Shows correlation ID in error scenarios
+    /// Shows correlation ID in error scenarios (No wrapper needed!)
     /// </summary>
     [HttpGet("error")]
     public ActionResult<CorrelationDemo> GetError()
@@ -115,20 +106,8 @@ public class CorrelationDemoController : ControllerBase
         
         try
         {
-            CorrelationIdHelper.ExecuteWithCorrelationId(_correlationIdService, () =>
-            {
-                _logger.LogDebug("About to simulate an error");
-                throw new InvalidOperationException("Simulated error for correlation demo");
-            });
-            
-            // This won't be reached due to the exception above
-            return Ok(new CorrelationDemo
-            {
-                Message = "This should not be reached",
-                CorrelationId = _correlationIdService.CorrelationId,
-                Timestamp = DateTime.UtcNow,
-                RequestId = HttpContext.TraceIdentifier
-            });
+            _logger.LogDebug("About to simulate an error");
+            throw new InvalidOperationException("Simulated error for correlation demo");
         }
         catch (Exception ex)
         {
@@ -167,37 +146,28 @@ public class CorrelationDemoController : ControllerBase
         });
     }
 
-    // Private helper methods demonstrating nested correlation tracking
+    // Private helper methods demonstrating nested correlation tracking (No wrappers needed!)
 
     private async Task<string> ProcessAdditionalDataAsync()
     {
-        return await CorrelationIdHelper.ExecuteWithCorrelationIdAsync(_correlationIdService, async () =>
-        {
-            _logger.LogDebug("Processing additional data asynchronously");
-            await Task.Delay(50);
-            return $"AsyncData-{DateTime.UtcNow.Ticks % 1000}";
-        });
+        _logger.LogDebug("Processing additional data asynchronously");
+        await Task.Delay(50);
+        return $"AsyncData-{DateTime.UtcNow.Ticks % 1000}";
     }
 
     private async Task<string> ProcessLevel2Async()
     {
-        return await CorrelationIdHelper.ExecuteWithCorrelationIdAsync(_correlationIdService, async () =>
-        {
-            _logger.LogDebug("Level 2: Processing async operation");
-            await Task.Delay(25);
-            
-            var level3Data = ProcessLevel3();
-            return $"Level2-{level3Data}";
-        });
+        _logger.LogDebug("Level 2: Processing async operation");
+        await Task.Delay(25);
+        
+        var level3Data = ProcessLevel3();
+        return $"Level2-{level3Data}";
     }
 
     private string ProcessLevel3()
     {
-        return CorrelationIdHelper.ExecuteWithCorrelationId(_correlationIdService, () =>
-        {
-            _logger.LogDebug("Level 3: Processing synchronous operation");
-            return $"Level3-{DateTime.UtcNow.Millisecond}";
-        });
+        _logger.LogDebug("Level 3: Processing synchronous operation");
+        return $"Level3-{DateTime.UtcNow.Millisecond}";
     }
 }
 

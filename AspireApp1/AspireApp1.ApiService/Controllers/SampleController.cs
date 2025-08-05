@@ -21,20 +21,17 @@ public class SampleController : ControllerBase
     {
         _logger.LogInformation("Starting synchronous operation");
 
-        var result = CorrelationIdHelper.ExecuteWithCorrelationId(_correlationIdService, () =>
+        _logger.LogDebug("Processing synchronous request");
+        
+        // Simulate some work
+        Thread.Sleep(100);
+        
+        var result = new SampleResponse
         {
-            _logger.LogDebug("Processing synchronous request");
-            
-            // Simulate some work
-            Thread.Sleep(100);
-            
-            return new SampleResponse
-            {
-                Message = "Synchronous operation completed",
-                Timestamp = DateTime.UtcNow,
-                CorrelationId = _correlationIdService.CorrelationId
-            };
-        });
+            Message = "Synchronous operation completed",
+            Timestamp = DateTime.UtcNow,
+            CorrelationId = _correlationIdService.CorrelationId
+        };
 
         _logger.LogInformation("Synchronous operation completed successfully");
         return Ok(result);
@@ -45,20 +42,17 @@ public class SampleController : ControllerBase
     {
         _logger.LogInformation("Starting asynchronous operation");
 
-        var result = await CorrelationIdHelper.ExecuteWithCorrelationIdAsync(_correlationIdService, async () =>
+        _logger.LogDebug("Processing asynchronous request");
+        
+        // Simulate some async work
+        await Task.Delay(100);
+        
+        var result = new SampleResponse
         {
-            _logger.LogDebug("Processing asynchronous request");
-            
-            // Simulate some async work
-            await Task.Delay(100);
-            
-            return new SampleResponse
-            {
-                Message = "Asynchronous operation completed",
-                Timestamp = DateTime.UtcNow,
-                CorrelationId = _correlationIdService.CorrelationId
-            };
-        });
+            Message = "Asynchronous operation completed",
+            Timestamp = DateTime.UtcNow,
+            CorrelationId = _correlationIdService.CorrelationId
+        };
 
         _logger.LogInformation("Asynchronous operation completed successfully");
         return Ok(result);
@@ -69,21 +63,18 @@ public class SampleController : ControllerBase
     {
         _logger.LogInformation("Starting nested operation");
 
-        var result = await CorrelationIdHelper.ExecuteWithCorrelationIdAsync(_correlationIdService, async () =>
+        _logger.LogDebug("Starting first level of nested operation");
+        
+        var intermediateResult = await ProcessNestedOperation();
+        
+        _logger.LogDebug("Completed nested operations");
+        
+        var result = new SampleResponse
         {
-            _logger.LogDebug("Starting first level of nested operation");
-            
-            var intermediateResult = await ProcessNestedOperation();
-            
-            _logger.LogDebug("Completed nested operations");
-            
-            return new SampleResponse
-            {
-                Message = $"Nested operation completed: {intermediateResult}",
-                Timestamp = DateTime.UtcNow,
-                CorrelationId = _correlationIdService.CorrelationId
-            };
-        });
+            Message = $"Nested operation completed: {intermediateResult}",
+            Timestamp = DateTime.UtcNow,
+            CorrelationId = _correlationIdService.CorrelationId
+        };
 
         _logger.LogInformation("Nested operation completed successfully");
         return Ok(result);
@@ -91,25 +82,19 @@ public class SampleController : ControllerBase
 
     private async Task<string> ProcessNestedOperation()
     {
-        return await CorrelationIdHelper.ExecuteWithCorrelationIdAsync(_correlationIdService, async () =>
-        {
-            _logger.LogDebug("Processing nested operation level 2");
-            await Task.Delay(50);
-            
-            var deepResult = ProcessDeepOperation();
-            _logger.LogDebug("Deep operation result: {Result}", deepResult);
-            
-            return $"Nested-{deepResult}";
-        });
+        _logger.LogDebug("Processing nested operation level 2");
+        await Task.Delay(50);
+        
+        var deepResult = ProcessDeepOperation();
+        _logger.LogDebug("Deep operation result: {Result}", deepResult);
+        
+        return $"Nested-{deepResult}";
     }
 
     private string ProcessDeepOperation()
     {
-        return CorrelationIdHelper.ExecuteWithCorrelationId(_correlationIdService, () =>
-        {
-            _logger.LogDebug("Processing deep operation level 3");
-            return $"Deep-{DateTime.UtcNow.Ticks % 1000}";
-        });
+        _logger.LogDebug("Processing deep operation level 3");
+        return $"Deep-{DateTime.UtcNow.Ticks % 1000}";
     }
 
     [HttpGet("correlation-info")]

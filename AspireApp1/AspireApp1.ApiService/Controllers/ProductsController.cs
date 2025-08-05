@@ -30,11 +30,8 @@ public class ProductsController : ControllerBase
     {
         _logger.LogInformation("Getting all products");
         
-        return CorrelationIdHelper.ExecuteWithCorrelationId(_correlationIdService, () =>
-        {
-            _logger.LogDebug("Retrieved {ProductCount} products", Products.Count);
-            return (ActionResult<IEnumerable<Product>>)Ok(Products);
-        });
+        _logger.LogDebug("Retrieved {ProductCount} products", Products.Count);
+        return Ok(Products);
     }
 
     [HttpGet("{id:int}")]
@@ -42,18 +39,15 @@ public class ProductsController : ControllerBase
     {
         _logger.LogInformation("Getting product by ID: {ProductId}", id);
         
-        return CorrelationIdHelper.ExecuteWithCorrelationId(_correlationIdService, () =>
+        var product = Products.FirstOrDefault(p => p.Id == id);
+        if (product == null)
         {
-            var product = Products.FirstOrDefault(p => p.Id == id);
-            if (product == null)
-            {
-                _logger.LogWarning("Product with ID {ProductId} not found", id);
-                return (ActionResult<Product>)NotFound($"Product with ID {id} not found");
-            }
-            
-            _logger.LogDebug("Found product: {ProductName}", product.Name);
-            return (ActionResult<Product>)Ok(product);
-        });
+            _logger.LogWarning("Product with ID {ProductId} not found", id);
+            return NotFound($"Product with ID {id} not found");
+        }
+        
+        _logger.LogDebug("Found product: {ProductName}", product.Name);
+        return Ok(product);
     }
 
     [HttpGet("category/{category}")]

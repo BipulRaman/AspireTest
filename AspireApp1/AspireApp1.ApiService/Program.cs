@@ -1,4 +1,5 @@
 using AspireApp1.CorrelationId;
+using AspireApp1.ApiService.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,8 +10,11 @@ builder.AddServiceDefaults();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 
-// Add Correlation ID services
-builder.Services.AddCorrelationId();
+// Add Correlation ID services with HTTP client integration
+builder.Services.AddCorrelationIdWithHttpClient();
+
+// Add our weather service
+builder.Services.AddScoped<IWeatherService, WeatherService>();
 
 // Add API documentation
 builder.Services.AddEndpointsApiExplorer();

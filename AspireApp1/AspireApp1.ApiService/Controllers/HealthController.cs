@@ -21,30 +21,29 @@ public class HealthController : ControllerBase
     {
         _logger.LogInformation("Health check requested");
         
-        return CorrelationIdHelper.ExecuteWithCorrelationId(_correlationIdService, () =>
+        _logger.LogDebug("Performing basic health check");
+        
+        var healthStatus = new HealthStatus
         {
-            _logger.LogDebug("Performing basic health check");
-            
-            var healthStatus = new HealthStatus
-            {
-                Status = "Healthy",
-                Timestamp = DateTime.UtcNow,
-                Version = "1.0.0",
-                Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"
-            };
-            
-            _logger.LogDebug("Health check completed successfully");
-            return (ActionResult<HealthStatus>)Ok(healthStatus);
-        });
+            Status = "Healthy",
+            Timestamp = DateTime.UtcNow,
+            Version = "1.0.0",
+            Environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Production"
+        };
+        
+        _logger.LogDebug("Health check completed successfully");
+        return Ok(healthStatus);
     }
 
     [HttpGet("detailed")]
     public ActionResult<DetailedHealthStatus> GetDetailed()
     {
+        _logger.LogInformation("Detailed health check requested");
+        
         var memoryUsage = GC.GetTotalMemory(false);
         var uptime = DateTime.UtcNow - Process.GetCurrentProcess().StartTime.ToUniversalTime();
 
-        return Ok(new DetailedHealthStatus
+        var detailedStatus = new DetailedHealthStatus
         {
             Status = "Healthy",
             Timestamp = DateTime.UtcNow,
@@ -54,7 +53,10 @@ public class HealthController : ControllerBase
             UptimeSeconds = (long)uptime.TotalSeconds,
             MachineName = Environment.MachineName,
             ProcessorCount = Environment.ProcessorCount
-        });
+        };
+
+        _logger.LogInformation("Detailed health check completed");
+        return Ok(detailedStatus);
     }
 
     [HttpGet("ping")]

@@ -30,38 +30,45 @@ public class UsersController : ControllerBase
     {
         _logger.LogInformation("Getting users with department filter: {Department}", department ?? "none");
         
-        var users = CorrelationIdHelper.ExecuteWithCorrelationId(_correlationIdService, () =>
-        {
-            var filteredUsers = string.IsNullOrWhiteSpace(department) 
-                ? Users 
-                : Users.Where(u => u.Department.Equals(department, StringComparison.OrdinalIgnoreCase));
-            
-            _logger.LogDebug("Found {UserCount} users", filteredUsers.Count());
-            return filteredUsers;
-        });
-
-        return Ok(users);
+        var filteredUsers = string.IsNullOrWhiteSpace(department) 
+            ? Users 
+            : Users.Where(u => u.Department.Equals(department, StringComparison.OrdinalIgnoreCase));
+        
+        _logger.LogDebug("Found {UserCount} users", filteredUsers.Count());
+        
+        _logger.LogInformation("Users retrieval completed");
+        return Ok(filteredUsers);
     }
 
     [HttpGet("{id:int}")]
     public ActionResult<User> GetById(int id)
     {
+        _logger.LogInformation("Getting user by ID: {UserId}", id);
+        
         var user = Users.FirstOrDefault(u => u.Id == id);
         if (user == null)
         {
+            _logger.LogWarning("User with ID {UserId} not found", id);
             return NotFound($"User with ID {id} not found");
         }
+        
+        _logger.LogInformation("User retrieved successfully: {UserId}", id);
         return Ok(user);
     }
 
     [HttpGet("email/{email}")]
     public ActionResult<User> GetByEmail(string email)
     {
+        _logger.LogInformation("Getting user by email: {Email}", email);
+        
         var user = Users.FirstOrDefault(u => u.Email.Equals(email, StringComparison.OrdinalIgnoreCase));
         if (user == null)
         {
+            _logger.LogWarning("User with email '{Email}' not found", email);
             return NotFound($"User with email '{email}' not found");
         }
+        
+        _logger.LogInformation("User retrieved successfully by email: {Email}", email);
         return Ok(user);
     }
 
