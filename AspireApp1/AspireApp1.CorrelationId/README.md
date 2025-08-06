@@ -1,32 +1,55 @@
 # AspireApp1.CorrelationId
 
-A **zero-boilerplate** correlation ID tracking library for ASP.NET Core applications with **automatic HTTP client integration** for distributed tracing.
+A **zero-boilerplate** correlation ID tracking library for ASP.NET Core applications with **automatic HTTP client integration** and **configurable additional headers** for comprehensive distributed tracing.
 
 ## Features
 
 - **🚀 Zero Boilerplate**: No wrapper methods needed - correlation ID available everywhere automatically
 - **🔄 Automatic Flow**: Correlation ID flows seamlessly through all async operations via `AsyncLocal<T>`
-- **📨 Automatic Header Tracking**: Tracks `X-Correlation-Id` header on all incoming requests
+- **📨 Automatic Header Tracking**: Tracks `X-Correlation-Id` and configurable additional headers on all incoming requests
 - **🎯 Auto-Generation**: Generates new correlation ID if header is missing
-- **📝 Automatic Logging**: Adds correlation ID to all log entries (both message prefix and structured properties)
-- **🔍 Structured Logging**: Adds correlation ID as custom properties for searchable metadata
-- **🌐 HTTP Client Integration**: Automatically propagates correlation ID to outgoing HTTP requests
+- **📝 Automatic Logging**: Adds all captured headers to log entries (both message prefix and structured properties)
+- **🔍 Structured Logging**: Adds all headers as custom properties for searchable metadata
+- **🌐 HTTP Client Integration**: Automatically propagates all headers to outgoing HTTP requests
 - **🏷️ Named HTTP Clients**: Support for multiple configured HTTP clients with correlation
-- **🔗 Distributed Tracing**: End-to-end correlation across microservices
-- **⚡ Thread-Safe**: Uses `AsyncLocal<T>` for thread-safe correlation ID storage
+- **🔗 Distributed Tracing**: End-to-end correlation across microservices with custom headers
+- **⚡ Thread-Safe**: Uses `AsyncLocal<T>` for thread-safe header storage
+- **🎛️ Configurable Headers**: Support for additional custom headers like X-Event-Id, X-User-Id, etc.
 
 ## Usage
 
 ### 1. Basic Setup (Correlation ID only)
 
 ```csharp
+// Simple setup - correlation ID only
 builder.Services.AddCorrelationId();
 app.UseCorrelationId();
 
 // That's it! Correlation ID now available everywhere automatically
 ```
 
-### 2. Advanced Setup (With HTTP Client Integration - Recommended)
+### 2. Basic Setup with Additional Headers
+
+```csharp
+// Configure additional headers without HTTP client integration
+builder.Services.AddCorrelationId(options =>
+{
+    // Configure additional headers to capture and log
+    options.AdditionalHeaders.AddRange(new[]
+    {
+        "X-Event-Id",           // Custom event tracking header
+        "X-User-Id",            // User identifier for request tracking
+        "X-Request-Source"      // Source system identifier
+    });
+    
+    // Add captured headers to response for client tracking
+    options.AddAdditionalHeadersToResponse = true;
+});
+
+app.UseCorrelationId();
+```
+
+### 3. Advanced Setup (With HTTP Client Integration - Recommended)
 
 ```csharp
 // Add correlation ID with HTTP client support
@@ -38,7 +61,41 @@ app.UseCorrelationId();
 // Now all HTTP calls automatically include correlation headers!
 ```
 
-### 3. Custom HTTP Client Configuration
+### 4. Full Configuration with HTTP Client Integration
+
+```csharp
+// Configure additional headers with HTTP client integration
+builder.Services.AddCorrelationIdWithHttpClient(options =>
+{
+    // Configure additional headers to capture and log
+    options.AdditionalHeaders.AddRange(new[]
+    {
+        "X-Event-Id",           // Custom event tracking header
+        "X-User-Id",            // User identifier for request tracking
+        "X-Request-Source",     // Source system identifier
+        "X-Tenant-Id",          // Multi-tenant identifier
+        "X-Session-Id"          // Session tracking
+    });
+    
+    // Add captured headers to response for client tracking
+    options.AddAdditionalHeadersToResponse = true;
+    
+    // Configure correlation ID header name (default: "X-Correlation-Id")
+    options.CorrelationIdHeader = "X-Custom-Correlation-Id";
+    
+    // Control auto-generation (default: true)
+    // When true: Automatically generates new correlation ID if request doesn't have one
+    // When false: Only tracks correlation ID if provided in request headers
+    options.AutoGenerate = true;
+    
+    // Add correlation ID to response headers (default: true)
+    options.AddToResponseHeaders = true;
+});
+
+app.UseCorrelationId();
+```
+
+### 5. Custom HTTP Client Configuration
 
 ```csharp
 // Add specific HTTP clients with correlation ID support
@@ -54,6 +111,161 @@ builder.Services.AddHttpClient(CorrelationIdHttpClientNames.ExternalApi, client 
     client.BaseAddress = new Uri("https://external-api.example.com");
 }).AddCorrelationId();
 ```
+
+### 6. Accessing Additional Headers Programmatically
+
+```csharp
+[ApiController]
+public class MyController : ControllerBase
+{
+    private readonly ILogger<MyController> _logger;
+    private readonly ICorrelationIdService _correlationIdService;
+
+    public MyController(ILogger<MyController> logger, ICorrelationIdService correlationIdService)
+    {
+        _logger = logger;
+        _correlationIdService = correlationIdService;
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Get()
+    {
+        // All logs automatically include all captured headers - no wrapper needed!
+        _logger.LogInformation("Processing request");
+        
+        // Get all captured headers (correlation ID + additional headers)
+        var allHeaders = _correlationIdService.CapturedHeaders;
+        
+        // Get specific headers
+        var eventId = _correlationIdService.GetHeader("X-Event-Id");
+        var userId = _correlationIdService.GetHeader("X-User-Id");
+        var correlationId = _correlationIdService.CorrelationId;
+        
+        // Set additional headers programmatically
+        _correlationIdService.SetAdditionalHeaders(new Dictionary<string, string>
+        {
+            { "X-Processing-Stage", "business-logic" },
+            { "X-Request-Priority", "high" }
+        });
+        
+        _logger.LogInformation("Request completed with headers: {Headers}", 
+            string.Join(", ", allHeaders.Select(h => $"{h.Key}={h.Value}")));
+        
+        return Ok(new 
+        { 
+            Result = "Success", 
+            CorrelationId = correlationId,
+            EventId = eventId,
+            UserId = userId,
+            AllHeaders = allHeaders
+        });
+    }
+}
+```
+
+## Configuration Options Summary
+
+Both `AddCorrelationId()` and `AddCorrelationIdWithHttpClient()` support the same configuration options:
+
+| Method | HTTP Client Integration | Configuration Support | Use Case |
+|--------|------------------------|----------------------|----------|
+| `AddCorrelationId()` | ❌ No | ✅ Yes | Web apps, APIs without external HTTP calls |
+| `AddCorrelationId(options => {})` | ❌ No | ✅ Yes | Web apps with additional headers, no HTTP calls |
+| `AddCorrelationIdWithHttpClient()` | ✅ Yes | ❌ Default only | APIs with external HTTP calls, default config |
+| `AddCorrelationIdWithHttpClient(options => {})` | ✅ Yes | ✅ Yes | APIs with external HTTP calls + custom headers |
+
+**Choose your setup:**
+- **Basic web app/API**: Use `AddCorrelationId()`
+- **Need additional headers but no HTTP calls**: Use `AddCorrelationId(options => {})`
+- **API calling other services**: Use `AddCorrelationIdWithHttpClient()`  
+- **API with additional headers + HTTP calls**: Use `AddCorrelationIdWithHttpClient(options => {})`
+
+## Configuration Options Explained
+
+### CorrelationIdOptions Properties
+
+```csharp
+public class CorrelationIdOptions
+{
+    // Header name for correlation ID (default: "X-Correlation-Id")
+    public string CorrelationIdHeader { get; set; } = "X-Correlation-Id";
+    
+    // List of additional headers to capture and track
+    public List<string> AdditionalHeaders { get; set; } = new();
+    
+    // Auto-generate correlation ID if not provided in request (default: true)
+    public bool AutoGenerate { get; set; } = true;
+    
+    // Add correlation ID to response headers (default: true)
+    public bool AddToResponseHeaders { get; set; } = true;
+    
+    // Add captured additional headers to response headers (default: false)
+    public bool AddAdditionalHeadersToResponse { get; set; } = false;
+}
+```
+
+### AutoGenerate Behavior Examples
+
+**AutoGenerate = true (Default):**
+```
+Incoming Request: GET /api/data
+(no correlation header)
+
+Middleware Action:
+✅ Generates new correlation ID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+✅ Sets in context for logging and processing
+✅ Adds to response headers
+
+Response: 200 OK
+Header: X-Correlation-Id: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+
+Logs: [CorrelationId: a1b2c3d4-e5f6-7890-abcd-ef1234567890] Processing request
+```
+
+**AutoGenerate = false:**
+```
+Incoming Request: GET /api/data
+(no correlation header)
+
+Middleware Action:
+❌ No correlation ID generated
+❌ CorrelationId remains null/empty
+❌ No response header added
+
+Response: 200 OK
+(no correlation header)
+
+Logs: Processing request (no correlation ID in logs)
+```
+
+**With AutoGenerate = false but header provided:**
+```
+Incoming Request: GET /api/data
+Header: X-Correlation-Id: user123abc
+
+Middleware Action:
+✅ Uses provided correlation ID: "user123abc"
+✅ Sets in context for logging
+✅ Adds to response headers
+
+Response: 200 OK
+Header: X-Correlation-Id: user123abc
+
+Logs: [CorrelationId: user123abc] Processing request
+```
+
+### When to Use AutoGenerate = false
+
+Use `AutoGenerate = false` when:
+- **Strict tracking only**: You only want to track requests that already have correlation IDs
+- **Gateway scenarios**: External gateway handles correlation ID generation
+- **Optional correlation**: Correlation ID is optional for your application
+- **Performance**: Slight performance improvement by not generating GUIDs
+
+Use `AutoGenerate = true` (default) when:
+- **Complete tracing**: You want every request to have a correlation ID
+- **Microservices**: Each service should generate IDs for requests without them
+- **Debugging**: Easier to trace all requests, even those from tools/health checks
 
 ## Usage Examples
 

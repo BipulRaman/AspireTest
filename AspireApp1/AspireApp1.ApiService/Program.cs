@@ -10,8 +10,18 @@ builder.AddServiceDefaults();
 builder.Services.AddProblemDetails();
 builder.Services.AddControllers();
 
-// Add Correlation ID services with HTTP client integration
-builder.Services.AddCorrelationIdWithHttpClient();
+// Add Correlation ID services with HTTP client integration and additional headers
+builder.Services.AddCorrelationIdWithHttpClient(options =>
+{
+    // Configure additional headers to capture and log alongside correlation ID
+    options.AdditionalHeaders.AddRange(new[]
+    {          // Custom event tracking header
+        "X-User-Id"          // Source system identifier
+    });
+    
+    // Add captured headers to response for client tracking
+    options.AddAdditionalHeadersToResponse = true;
+});
 
 // Add our weather service
 builder.Services.AddScoped<IWeatherService, WeatherService>();

@@ -11,10 +11,19 @@ namespace AspireApp1.CorrelationId;
 public static class CorrelationIdExtensions
 {
     /// <summary>
-    /// Adds correlation ID services to the dependency injection container
+    /// Adds correlation ID services to the dependency injection container with default configuration
     /// </summary>
     public static IServiceCollection AddCorrelationId(this IServiceCollection services)
     {
+        return services.AddCorrelationId(_ => { });
+    }
+
+    /// <summary>
+    /// Adds correlation ID services to the dependency injection container with configuration
+    /// </summary>
+    public static IServiceCollection AddCorrelationId(this IServiceCollection services, Action<CorrelationIdOptions> configureOptions)
+    {
+        services.Configure(configureOptions);
         services.AddSingleton<ICorrelationIdService, CorrelationIdService>();
         
         // Replace the default logger factory to include correlation ID
@@ -30,10 +39,10 @@ public static class CorrelationIdExtensions
     /// <summary>
     /// Adds correlation ID services with HTTP client integration
     /// </summary>
-    public static IServiceCollection AddCorrelationIdWithHttpClient(this IServiceCollection services)
+    public static IServiceCollection AddCorrelationIdWithHttpClient(this IServiceCollection services, Action<CorrelationIdOptions>? configureOptions = null)
     {
         // Add basic correlation ID services
-        services.AddCorrelationId();
+        services.AddCorrelationId(configureOptions ?? (_ => { }));
 
         // Register the HTTP message handler
         services.AddTransient<CorrelationIdHttpMessageHandler>();
@@ -157,31 +166,32 @@ internal class CorrelationIdLoggerFactory : ILoggerFactory
             if (!IsEnabled(logLevel))
                 return;
 
-            var correlationId = _correlationIdService.CorrelationId;
+            var capturedHeaders = _correlationIdService.CapturedHeaders;
             
-            // Automatically create structured logging state with correlation ID properties
+            // Automatically create structured logging state with all captured headers
             var enhancedState = new CorrelationEnhancedState<TState>
             {
                 OriginalState = state,
-                CorrelationId = correlationId
+                CapturedHeaders = capturedHeaders
             };
 
-            // Add correlation ID to the message for readability and structured properties automatically
+            // Add all captured headers to the message for readability
             var originalMessage = formatter(state, exception);
-            var messageWithCorrelationId = $"[CorrelationId: {correlationId}] {originalMessage}";
+            var headerInfo = string.Join(", ", capturedHeaders.Select(h => $"{h.Key}: {h.Value}"));
+            var messageWithHeaders = $"[{headerInfo}] {originalMessage}";
 
-            _logger.Log(logLevel, eventId, enhancedState, exception, (enhancedState, ex) => messageWithCorrelationId);
+            _logger.Log(logLevel, eventId, enhancedState, exception, (enhancedState, ex) => messageWithHeaders);
         }
     }
 }
 
 /// <summary>
-/// Enhanced state object that automatically includes correlation ID as structured properties
+/// Enhanced state object that automatically includes all captured headers as structured properties
 /// </summary>
 internal class CorrelationEnhancedState<TState> : IReadOnlyList<KeyValuePair<string, object>>
 {
     public required TState OriginalState { get; init; }
-    public required string CorrelationId { get; init; }
+    public required Dictionary<string, string> CapturedHeaders { get; init; }
 
     private List<KeyValuePair<string, object>>? _properties;
 
@@ -191,10 +201,13 @@ internal class CorrelationEnhancedState<TState> : IReadOnlyList<KeyValuePair<str
         {
             if (_properties == null)
             {
-                _properties = new List<KeyValuePair<string, object>>
+                _properties = new List<KeyValuePair<string, object>>();
+                
+                // Add all captured headers as structured properties
+                foreach (var header in CapturedHeaders)
                 {
-                    new("CorrelationId", CorrelationId)
-                };
+                    _properties.Add(new KeyValuePair<string, object>(header.Key, header.Value));
+                }
 
                 // Include original state properties if it implements IReadOnlyList<KeyValuePair<string, object>>
                 if (OriginalState is IReadOnlyList<KeyValuePair<string, object>> originalProperties)

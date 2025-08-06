@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 namespace AspireApp1.CorrelationId;
 
 /// <summary>
-/// Custom logger that automatically adds correlation ID to all log entries
+/// Custom logger that automatically adds correlation ID and additional headers to all log entries
 /// </summary>
 public class CorrelationIdLogger<T> : ILogger<T>
 {
@@ -18,6 +18,15 @@ public class CorrelationIdLogger<T> : ILogger<T>
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull
     {
+        // Create scope with all captured headers for structured logging
+        var capturedHeaders = _correlationIdService.CapturedHeaders;
+        
+        if (capturedHeaders.Any())
+        {
+            // Begin scope with all headers as structured properties
+            return _logger.BeginScope(capturedHeaders);
+        }
+        
         return _logger.BeginScope(state);
     }
 
@@ -31,11 +40,15 @@ public class CorrelationIdLogger<T> : ILogger<T>
         if (!IsEnabled(logLevel))
             return;
 
-        // Create a new state with correlation ID
-        var correlationId = _correlationIdService.CorrelationId;
+        var capturedHeaders = _correlationIdService.CapturedHeaders;
         var originalMessage = formatter(state, exception);
-        var messageWithCorrelationId = $"[CorrelationId: {correlationId}] {originalMessage}";
+        
+        // Build header context for message prefix
+        var headerContext = string.Join(", ", capturedHeaders.Select(h => $"{h.Key}: {h.Value}"));
+        var messageWithHeaders = $"[{headerContext}] {originalMessage}";
 
-        _logger.Log(logLevel, eventId, messageWithCorrelationId, exception, (s, ex) => s);
+        // Use structured logging scope to include all headers as searchable properties
+        using var scope = _logger.BeginScope(capturedHeaders);
+        _logger.Log(logLevel, eventId, messageWithHeaders, exception, (s, ex) => s);
     }
 }
