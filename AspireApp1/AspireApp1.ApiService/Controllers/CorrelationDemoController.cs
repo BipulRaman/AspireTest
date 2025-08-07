@@ -47,10 +47,11 @@ public class CorrelationDemoController : ControllerBase
         _logger.LogInformation("Async correlation demo started");
         
         _logger.LogDebug("Processing async correlation demo");
-        
+
+        string myName = "Bipul";
         // Simulate async work
         await Task.Delay(100);
-        _logger.LogDebug("Async delay completed");
+        _logger.LogDebug("Async delay completed -- {myName}", myName);
         
         // Call another async method
         var additionalData = await ProcessAdditionalDataAsync();

@@ -66,8 +66,8 @@ public class EnhancedCorrelationIdService : CorrelationIdService, IEnhancedCorre
 
         string? correlationId = null;
 
-        // Try to get from headers first
-        correlationId = ExtractFromHeaders(request.Headers);
+        // Try to get from headers first and capture additional headers
+        correlationId = GetOrCreateFromHeaders(request.Headers, _options.AdditionalHeaders);
 
         // Try query parameters if enabled and header not found
         if (string.IsNullOrWhiteSpace(correlationId) && _options.Triggers.Http.UseQueryParameter)

@@ -1,17 +1,18 @@
 # AspireApp1.CorrelationId.AzureFunctions
 
-A comprehensive correlation ID tracking library for Azure Functions with support for **multiple trigger types**, adapted from the ASP.NET Core version.
+A comprehensive correlation ID tracking library for Azure Functions with support for **multiple trigger types** and **configurable additional headers**, adapted from the ASP.NET Core version.
 
 ## Features
 
 - **Multi-Trigger Support**: HTTP, Queue, Service Bus, Event Hub, Timer, and Blob triggers
-- **Automatic Header Tracking**: Tracks `X-Correlation-Id` header on HTTP-triggered functions
+- **Automatic Header Tracking**: Tracks `X-Correlation-Id` and configurable additional headers on HTTP-triggered functions
+- **Additional Headers Support**: Capture custom headers like X-Event-Id, X-User-Id, X-Tenant-Id alongside correlation ID
 - **Message-Based Correlation**: Extracts correlation IDs from queue messages, Service Bus messages, and Event Hub events
 - **Auto-Generation**: Generates new correlation ID if not present
 - **Configurable Extraction**: Flexible configuration for different trigger types
-- **Automatic Response Headers**: Adds correlation ID to HTTP response headers
-- **Structured Logging**: Adds correlation ID as searchable properties in Azure Functions logs
-- **Thread-Safe**: Uses `AsyncLocal<T>` for thread-safe correlation ID storage
+- **Automatic Response Headers**: Adds correlation ID and additional headers to HTTP response headers
+- **Structured Logging**: Adds all captured headers as searchable properties in Azure Functions logs
+- **Thread-Safe**: Uses `AsyncLocal<T>` for thread-safe header storage
 - **Base Class Support**: Provides base classes for different trigger types
 - **Helper Methods**: Utility methods for manual correlation tracking
 - **Activity Integration**: Works with distributed tracing and Application Insights
@@ -36,18 +37,63 @@ var host = new HostBuilder()
 host.Run();
 ```
 
-### 2. Advanced Setup with Configuration
+### 2. Additional Headers Configuration
 
 ```csharp
 var host = new HostBuilder()
     .ConfigureFunctionsWorkerDefaults()
     .ConfigureServices(services =>
     {
-        // Advanced setup with custom configuration
+        // Configure additional headers alongside correlation ID
         services.AddCorrelationId(options =>
         {
-            // Global settings
-            options.HeaderName = "X-Custom-Correlation-Id";
+            // Configure additional headers to capture
+            options.AdditionalHeaders.AddRange(new[]
+            {
+                "X-Event-Id",           // Custom event tracking header
+                "X-User-Id",            // User identifier for request tracking
+                "X-Request-Source",     // Source system identifier
+                "X-Tenant-Id",          // Multi-tenant identifier
+                "X-Session-Id"          // Session tracking
+            });
+
+            // Add captured headers to HTTP response headers for client tracking
+            options.AddAdditionalHeadersToResponse = true;
+
+            // Configure correlation ID header name (default: "X-Correlation-Id")
+            options.HeaderName = "X-Correlation-Id";
+
+            // Control auto-generation (default: true)
+            options.AutoGenerate = true;
+
+            // Add correlation ID to HTTP response headers (default: true)
+            options.AddToResponseHeaders = true;
+        });
+    })
+    .Build();
+
+host.Run();
+```
+
+### 3. Advanced Setup with HTTP Client Integration
+
+```csharp
+var host = new HostBuilder()
+    .ConfigureFunctionsWorkerDefaults()
+    .ConfigureServices(services =>
+    {
+        // Advanced setup with HTTP client integration and additional headers
+        services.AddCorrelationIdWithHttpClient(options =>
+        {
+            // Configure additional headers
+            options.AdditionalHeaders.AddRange(new[]
+            {
+                "X-Event-Id",
+                "X-User-Id", 
+                "X-Request-Source"
+            });
+            
+            options.AddAdditionalHeadersToResponse = true;
             options.AutoGenerate = true;
             options.AddToResponseHeaders = true;
 
@@ -76,6 +122,57 @@ var host = new HostBuilder()
         });
     })
     .Build();
+```
+
+### 4. Accessing Additional Headers Programmatically
+
+```csharp
+public class MyFunction : CorrelatedHttpFunction
+{
+    public MyFunction(ILoggerFactory loggerFactory, IEnhancedCorrelationIdService correlationIdService)
+        : base(loggerFactory.CreateLogger<MyFunction>(), correlationIdService)
+    {
+    }
+
+    [Function("ProcessWithHeaders")]
+    public async Task<HttpResponseData> ProcessWithHeaders([HttpTrigger] HttpRequestData req)
+    {
+        return await ExecuteWithCorrelationAsync(req, async () =>
+        {
+            // All logs automatically include all captured headers
+            Logger.LogInformation("Processing request with headers");
+
+            // Get all captured headers (correlation ID + additional headers)
+            var allHeaders = CorrelationIdService.CapturedHeaders;
+            
+            // Get specific headers
+            var eventId = CorrelationIdService.GetHeader("X-Event-Id");
+            var userId = CorrelationIdService.GetHeader("X-User-Id");
+            var correlationId = CorrelationIdService.CorrelationId;
+            
+            // Set additional headers programmatically
+            CorrelationIdService.SetAdditionalHeaders(new Dictionary<string, string>
+            {
+                { "X-Processing-Stage", "business-logic" },
+                { "X-Function-Instance", Environment.MachineName }
+            });
+            
+            Logger.LogInformation("Request completed with headers: {Headers}", 
+                string.Join(", ", allHeaders.Select(h => $"{h.Key}={h.Value}")));
+            
+            var response = new 
+            { 
+                Result = "Success", 
+                CorrelationId = correlationId,
+                EventId = eventId,
+                UserId = userId,
+                AllHeaders = allHeaders
+            };
+
+            return await CreateJsonResponseAsync(req, response);
+        });
+    }
+}
 ```
 
 ## ⚡ **Important: Wrapping Required ONLY ONCE Per Function**

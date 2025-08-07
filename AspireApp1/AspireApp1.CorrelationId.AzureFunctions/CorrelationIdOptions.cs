@@ -11,6 +11,11 @@ public class CorrelationIdOptions
     public string HeaderName { get; set; } = "X-Correlation-Id";
 
     /// <summary>
+    /// List of additional headers to capture and track alongside correlation ID
+    /// </summary>
+    public List<string> AdditionalHeaders { get; set; } = new();
+
+    /// <summary>
     /// Whether to automatically generate correlation ID if not present (default: true)
     /// </summary>
     public bool AutoGenerate { get; set; } = true;
@@ -19,6 +24,11 @@ public class CorrelationIdOptions
     /// Whether to add correlation ID to HTTP response headers (default: true)
     /// </summary>
     public bool AddToResponseHeaders { get; set; } = true;
+
+    /// <summary>
+    /// Whether to add captured additional headers to HTTP response headers (default: false)
+    /// </summary>
+    public bool AddAdditionalHeadersToResponse { get; set; } = false;
 
     /// <summary>
     /// Whether to log function start/end automatically (default: true)

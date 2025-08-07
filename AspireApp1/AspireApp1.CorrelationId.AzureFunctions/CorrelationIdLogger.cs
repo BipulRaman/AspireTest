@@ -18,12 +18,15 @@ public class CorrelationIdLogger : ILogger
 
     public IDisposable? BeginScope<TState>(TState state) where TState : notnull
     {
-        // Create a scope with correlation ID included
-        var correlationId = _correlationIdService.CorrelationId;
-        var scopeState = new Dictionary<string, object>
+        // Create a scope with all captured headers included
+        var capturedHeaders = _correlationIdService.CapturedHeaders;
+        var scopeState = new Dictionary<string, object>();
+
+        // Add all captured headers as scope properties
+        foreach (var header in capturedHeaders)
         {
-            ["CorrelationId"] = correlationId
-        };
+            scopeState[header.Key] = header.Value;
+        }
 
         if (state is IEnumerable<KeyValuePair<string, object>> originalScope)
         {
@@ -46,30 +49,31 @@ public class CorrelationIdLogger : ILogger
         if (!IsEnabled(logLevel))
             return;
 
-        var correlationId = _correlationIdService.CorrelationId;
+        var capturedHeaders = _correlationIdService.CapturedHeaders;
         
-        // Create enhanced state with correlation ID for structured logging
+        // Create enhanced state with all captured headers for structured logging
         var enhancedState = new CorrelationEnhancedState<TState>
         {
             OriginalState = state,
-            CorrelationId = correlationId
+            CapturedHeaders = capturedHeaders
         };
 
-        // Add correlation ID to message for readability
+        // Add all captured headers to message for readability
         var originalMessage = formatter(state, exception);
-        var messageWithCorrelationId = $"[CorrelationId: {correlationId}] {originalMessage}";
+        var headerInfo = string.Join(", ", capturedHeaders.Select(h => $"{h.Key}: {h.Value}"));
+        var messageWithHeaders = $"[{headerInfo}] {originalMessage}";
 
-        _logger.Log(logLevel, eventId, enhancedState, exception, (enhancedState, ex) => messageWithCorrelationId);
+        _logger.Log(logLevel, eventId, enhancedState, exception, (enhancedState, ex) => messageWithHeaders);
     }
 }
 
 /// <summary>
-/// Enhanced state object that includes correlation ID as structured properties for Azure Functions logging
+/// Enhanced state object that includes all captured headers as structured properties for Azure Functions logging
 /// </summary>
 internal class CorrelationEnhancedState<TState> : IReadOnlyList<KeyValuePair<string, object>>
 {
     public required TState OriginalState { get; init; }
-    public required string CorrelationId { get; init; }
+    public required Dictionary<string, string> CapturedHeaders { get; init; }
 
     private List<KeyValuePair<string, object>>? _properties;
 
@@ -79,10 +83,13 @@ internal class CorrelationEnhancedState<TState> : IReadOnlyList<KeyValuePair<str
         {
             if (_properties == null)
             {
-                _properties = new List<KeyValuePair<string, object>>
+                _properties = new List<KeyValuePair<string, object>>();
+
+                // Add all captured headers as structured properties
+                foreach (var header in CapturedHeaders)
                 {
-                    new("CorrelationId", CorrelationId)
-                };
+                    _properties.Add(new KeyValuePair<string, object>(header.Key, header.Value));
+                }
 
                 // Include original state properties if it implements IReadOnlyList<KeyValuePair<string, object>>
                 if (OriginalState is IReadOnlyList<KeyValuePair<string, object>> originalProperties)

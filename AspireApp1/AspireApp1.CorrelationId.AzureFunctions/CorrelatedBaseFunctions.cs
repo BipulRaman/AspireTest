@@ -130,9 +130,28 @@ public abstract class CorrelatedHttpFunction : CorrelatedFunction
 
     private void AddCorrelationIdToResponse(Microsoft.Azure.Functions.Worker.Http.HttpResponseData response)
     {
+        // Add correlation ID to response if not already present
         if (!response.Headers.Any(h => h.Key.Equals(CorrelationIdHeader, StringComparison.OrdinalIgnoreCase)))
         {
             response.Headers.Add(CorrelationIdHeader, CorrelationIdService.CorrelationId);
+        }
+
+        // Add additional headers to response if configured
+        var enhancedService = CorrelationIdService as IEnhancedCorrelationIdService;
+        if (enhancedService != null)
+        {
+            var capturedHeaders = CorrelationIdService.CapturedHeaders;
+            foreach (var header in capturedHeaders)
+            {
+                // Skip correlation ID header as it's already added above
+                if (!header.Key.Equals(CorrelationIdHeader, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!response.Headers.Any(h => h.Key.Equals(header.Key, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        response.Headers.Add(header.Key, header.Value);
+                    }
+                }
+            }
         }
     }
 }

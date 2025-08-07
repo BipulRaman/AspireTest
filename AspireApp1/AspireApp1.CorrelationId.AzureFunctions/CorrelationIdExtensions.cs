@@ -16,32 +16,16 @@ public static class CorrelationIdExtensions
     /// </summary>
     public static IServiceCollection AddCorrelationId(this IServiceCollection services)
     {
-        services.AddSingleton<ICorrelationIdService, CorrelationIdService>();
-        
-        // Automatically decorate logger factory to wrap loggers with correlation ID functionality
-        services.Decorate<ILoggerFactory>((factory, provider) =>
-        {
-            var correlationIdService = provider.GetRequiredService<ICorrelationIdService>();
-            return new CorrelationIdLoggerFactory(factory, correlationIdService);
-        });
-
-        return services;
+        return services.AddCorrelationId(_ => { });
     }
 
     /// <summary>
     /// Adds enhanced correlation ID services with multi-trigger support and configuration options
     /// </summary>
-    public static IServiceCollection AddCorrelationId(this IServiceCollection services, Action<CorrelationIdOptions>? configure = null)
+    public static IServiceCollection AddCorrelationId(this IServiceCollection services, Action<CorrelationIdOptions> configure)
     {
         // Configure options
-        if (configure != null)
-        {
-            services.Configure(configure);
-        }
-        else
-        {
-            services.Configure<CorrelationIdOptions>(options => { }); // Use defaults
-        }
+        services.Configure(configure);
 
         // Register enhanced service
         services.AddSingleton<ICorrelationIdService, EnhancedCorrelationIdService>();
@@ -63,7 +47,7 @@ public static class CorrelationIdExtensions
     public static IServiceCollection AddCorrelationIdWithHttpClient(this IServiceCollection services, Action<CorrelationIdOptions>? configure = null)
     {
         // Add enhanced correlation ID services
-        services.AddCorrelationId(configure);
+        services.AddCorrelationId(configure ?? (_ => { }));
 
         // Register the HTTP message handler
         services.AddTransient<CorrelationIdHttpMessageHandler>();
