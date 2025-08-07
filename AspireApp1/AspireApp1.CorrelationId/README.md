@@ -180,6 +180,130 @@ Both `AddCorrelationId()` and `AddCorrelationIdWithHttpClient()` support the sam
 - **API calling other services**: Use `AddCorrelationIdWithHttpClient()`  
 - **API with additional headers + HTTP calls**: Use `AddCorrelationIdWithHttpClient(options => {})`
 
+## Program.cs Configuration Scenarios
+
+### Scenario 1: Standard Correlation ID with Default Settings
+
+For most applications that need basic correlation ID tracking with the default `X-Correlation-Id` header:
+
+```csharp
+// Program.cs - Basic setup
+using AspireApp1.CorrelationId;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add service defaults & Aspire client integrations
+builder.AddServiceDefaults();
+
+// Add services to the container
+builder.Services.AddProblemDetails();
+builder.Services.AddControllers();
+
+// Add Correlation ID services with HTTP client integration (default settings)
+builder.Services.AddCorrelationIdWithHttpClient();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline
+app.UseExceptionHandler();
+
+// Add Correlation ID middleware (should be early in the pipeline)
+app.UseCorrelationId();
+
+app.MapControllers();
+app.MapDefaultEndpoints();
+
+app.Run();
+```
+
+**Result:** 
+- Uses `X-Correlation-Id` header
+- Auto-generates correlation ID if missing
+- Adds correlation ID to response headers
+- Propagates correlation ID to all HTTP client calls
+
+### Scenario 2: Custom Correlation ID Header with Additional Headers
+
+For applications that need a custom correlation ID header name and want to track additional headers:
+
+```csharp
+// Program.cs - Custom configuration
+using AspireApp1.CorrelationId;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Add service defaults & Aspire client integrations
+builder.AddServiceDefaults();
+
+// Add services to the container
+builder.Services.AddProblemDetails();
+builder.Services.AddControllers();
+
+// Add Correlation ID services with custom configuration
+builder.Services.AddCorrelationIdWithHttpClient(options =>
+{
+    // Configure custom correlation ID header name (instead of default "X-Correlation-Id")
+    options.CorrelationIdHeader = "X-Custom-Correlation-Id";
+    
+    // Configure additional headers to capture and log alongside correlation ID
+    options.AdditionalHeaders.AddRange(new[]
+    {
+        "X-Event-Id",        // Custom event tracking header
+        "X-User-Id",         // User identifier for request tracking
+        "X-Request-Source",  // Source system identifier
+        "X-Tenant-Id"        // Multi-tenant identifier
+    });
+    
+    // Add captured headers to response for client tracking
+    options.AddAdditionalHeadersToResponse = true;
+    
+    // Control auto-generation behavior
+    options.AutoGenerate = true;
+    
+    // Add correlation ID to response headers
+    options.AddToResponseHeaders = true;
+});
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline
+app.UseExceptionHandler();
+
+// Add Correlation ID middleware (should be early in the pipeline)
+app.UseCorrelationId();
+
+app.MapControllers();
+app.MapDefaultEndpoints();
+
+app.Run();
+```
+
+**Result:**
+- Uses `X-Custom-Correlation-Id` header instead of default `X-Correlation-Id`
+- Captures and tracks additional headers: `X-Event-Id`, `X-User-Id`, `X-Request-Source`, `X-Tenant-Id`
+- Adds all captured headers to response headers for client tracking
+- Includes all headers in log entries automatically (both message prefix and structured properties)
+- **Propagates custom correlation ID header AND all additional headers to outgoing HTTP client calls**
+- HTTP clients will use `X-Custom-Correlation-Id` instead of the default header name
+- All downstream services receive the complete header context
+
+### When to Use Each Scenario
+
+**Use Scenario 1 (Default) when:**
+- You're fine with the standard `X-Correlation-Id` header name
+- You only need basic correlation ID tracking
+- You want minimal configuration
+- You're building a simple API or web application
+
+**Use Scenario 2 (Custom) when:**
+- Your organization uses a different correlation ID header name
+- You need to comply with specific naming conventions
+- You want to track additional context headers (user ID, tenant ID, etc.)
+- You need enhanced tracing across multiple systems
+- You want to include captured headers in API responses
+
+> **✅ HTTP Propagation Guarantee**: Both the custom correlation ID header name and all additional headers are automatically propagated to ALL outgoing HTTP client calls. The HTTP message handler respects your configuration and ensures complete header context flows through your distributed system.
+
 ## Configuration Options Explained
 
 ### CorrelationIdOptions Properties
@@ -648,9 +772,13 @@ public class BackgroundTaskController : ControllerBase
 
 ## HTTP Client Integration Features
 
-### Automatic Correlation ID Propagation
-- **Message Handler**: Automatically adds `X-Correlation-Id` header to all outgoing HTTP requests
-- **Logging Integration**: Logs all HTTP requests/responses with correlation context
+### Automatic Header Propagation
+- **Configurable Correlation ID Header**: Uses the configured header name (default: `X-Correlation-Id`)
+  - If you set `options.CorrelationIdHeader = "X-Custom-Correlation-Id"`, all HTTP calls use that header
+- **Additional Headers**: Automatically propagates ALL captured additional headers to outgoing requests
+  - Headers like `X-User-Id`, `X-Event-Id`, `X-Tenant-Id` are automatically included
+- **Message Handler**: Intelligently adds headers only if not already present in the request
+- **Logging Integration**: Logs all HTTP requests/responses with full correlation context
 - **Error Handling**: Maintains correlation context even when HTTP calls fail
 - **Thread Safety**: Works correctly with async/await and parallel HTTP calls
 
@@ -660,6 +788,34 @@ public class BackgroundTaskController : ControllerBase
   - `CorrelationIdHttpClientNames.Default`: General purpose client
   - `CorrelationIdHttpClientNames.ExternalApi`: For external API calls
   - `CorrelationIdHttpClientNames.InternalService`: For internal service calls
+
+### Header Propagation Example with Custom Configuration
+```csharp
+// Program.cs - Custom header configuration
+builder.Services.AddCorrelationIdWithHttpClient(options =>
+{
+    options.CorrelationIdHeader = "X-Custom-Correlation-Id";
+    options.AdditionalHeaders.AddRange(new[] { "X-User-Id", "X-Tenant-Id" });
+});
+```
+
+```
+Incoming Request: GET /api/data
+Headers: 
+  X-Custom-Correlation-Id: user123abc
+  X-User-Id: user789
+  X-Tenant-Id: tenant456
+
+Your API processes request and makes HTTP call:
+
+Outgoing HTTP Request: GET https://external-api.com/data
+Headers automatically added:
+  X-Custom-Correlation-Id: user123abc    ← Custom correlation ID header
+  X-User-Id: user789                      ← Additional header propagated
+  X-Tenant-Id: tenant456                  ← Additional header propagated
+
+External API receives all context headers!
+```
 
 ### Correlation Flow Example
 ```

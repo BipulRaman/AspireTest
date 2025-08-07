@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Net.Http;
 
 namespace AspireApp1.CorrelationId.AzureFunctions;
@@ -10,24 +11,45 @@ public class CorrelationIdHttpMessageHandler : DelegatingHandler
 {
     private readonly ICorrelationIdService _correlationIdService;
     private readonly ILogger<CorrelationIdHttpMessageHandler> _logger;
-    private const string CorrelationIdHeader = "X-Correlation-Id";
+    private readonly CorrelationIdOptions _options;
 
-    public CorrelationIdHttpMessageHandler(ICorrelationIdService correlationIdService, ILogger<CorrelationIdHttpMessageHandler> logger)
+    public CorrelationIdHttpMessageHandler(
+        ICorrelationIdService correlationIdService, 
+        ILogger<CorrelationIdHttpMessageHandler> logger,
+        IOptions<CorrelationIdOptions> options)
     {
         _correlationIdService = correlationIdService;
         _logger = logger;
+        _options = options.Value;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var correlationId = _correlationIdService.CorrelationId;
 
-        // Add correlation ID header if not already present
-        if (!request.Headers.Contains(CorrelationIdHeader) && !string.IsNullOrWhiteSpace(correlationId))
+        // Add correlation ID header if not already present (using configurable header name)
+        if (!request.Headers.Contains(_options.CorrelationIdHeader) && !string.IsNullOrWhiteSpace(correlationId))
         {
-            request.Headers.Add(CorrelationIdHeader, correlationId);
+            request.Headers.Add(_options.CorrelationIdHeader, correlationId);
             _logger.LogDebug("Added correlation ID {CorrelationId} to outgoing request to {Uri}", 
                 correlationId, request.RequestUri);
+        }
+
+        // Add additional headers if they exist
+        var capturedHeaders = _correlationIdService.CapturedHeaders;
+        foreach (var header in capturedHeaders)
+        {
+            // Skip correlation ID as it's already handled above
+            if (header.Key == _options.CorrelationIdHeader)
+                continue;
+
+            // Add header if not already present in the request
+            if (!request.Headers.Contains(header.Key) && !string.IsNullOrWhiteSpace(header.Value))
+            {
+                request.Headers.Add(header.Key, header.Value);
+                _logger.LogDebug("Added additional header {HeaderName}: {HeaderValue} to outgoing request to {Uri}", 
+                    header.Key, header.Value, request.RequestUri);
+            }
         }
 
         // Log the outgoing request with correlation context

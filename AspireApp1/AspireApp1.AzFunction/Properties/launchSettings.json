@@ -1,0 +1,13 @@
+{
+  "profiles": {
+    "AspireApp1.AzFunction": {
+      "commandName": "Project",
+      "launchBrowser": false,
+      "applicationUrl": "http://localhost:7071",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:7071"
+      }
+    }
+  }
+}

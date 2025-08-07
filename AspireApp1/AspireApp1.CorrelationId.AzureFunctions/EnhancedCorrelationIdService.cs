@@ -6,47 +6,6 @@ using System.Text.Json;
 namespace AspireApp1.CorrelationId.AzureFunctions;
 
 /// <summary>
-/// Enhanced correlation ID service with support for different Azure Functions trigger types
-/// </summary>
-public interface IEnhancedCorrelationIdService : ICorrelationIdService
-{
-    /// <summary>
-    /// Initializes correlation ID for HTTP triggers
-    /// </summary>
-    string InitializeForHttpTrigger(Microsoft.Azure.Functions.Worker.Http.HttpRequestData request);
-
-    /// <summary>
-    /// Initializes correlation ID for Queue triggers
-    /// </summary>
-    string InitializeForQueueTrigger(string queueMessage, FunctionContext context);
-
-    /// <summary>
-    /// Initializes correlation ID for Service Bus triggers
-    /// </summary>
-    string InitializeForServiceBusTrigger(object serviceBusMessage, FunctionContext context);
-
-    /// <summary>
-    /// Initializes correlation ID for Event Hub triggers
-    /// </summary>
-    string InitializeForEventHubTrigger(object eventData, FunctionContext context);
-
-    /// <summary>
-    /// Initializes correlation ID for Timer triggers
-    /// </summary>
-    string InitializeForTimerTrigger(object timerInfo, FunctionContext context);
-
-    /// <summary>
-    /// Initializes correlation ID for Blob triggers
-    /// </summary>
-    string InitializeForBlobTrigger(object blobTriggerData, FunctionContext context);
-
-    /// <summary>
-    /// Gets correlation context information
-    /// </summary>
-    CorrelationContext GetCorrelationContext();
-}
-
-/// <summary>
 /// Enhanced correlation ID service implementation with multi-trigger support
 /// </summary>
 public class EnhancedCorrelationIdService : CorrelationIdService, IEnhancedCorrelationIdService
@@ -56,29 +15,23 @@ public class EnhancedCorrelationIdService : CorrelationIdService, IEnhancedCorre
 
     public EnhancedCorrelationIdService(IOptions<CorrelationIdOptions> options)
     {
-        _options = options.Value;
+        _options = options?.Value ?? new CorrelationIdOptions();
     }
 
     public string InitializeForHttpTrigger(Microsoft.Azure.Functions.Worker.Http.HttpRequestData request)
     {
-        if (!_options.Triggers.Http.Enabled)
+        if (_options?.Triggers?.Http?.Enabled == false)
             return GenerateCorrelationId();
 
         string? correlationId = null;
 
-        // Try to get from headers first and capture additional headers
-        correlationId = GetOrCreateFromHeaders(request.Headers, _options.AdditionalHeaders);
+        // Try to get from headers first, auto-generate if not found, and capture additional headers
+        correlationId = GetOrCreateFromHeaders(request.Headers, _options?.AdditionalHeaders);
 
         // Try query parameters if enabled and header not found
-        if (string.IsNullOrWhiteSpace(correlationId) && _options.Triggers.Http.UseQueryParameter)
+        if (string.IsNullOrWhiteSpace(correlationId) && _options?.Triggers?.Http?.UseQueryParameter == true)
         {
             correlationId = ExtractFromQueryParameters(request.Url);
-        }
-
-        // Generate if not found and auto-generation is enabled
-        if (string.IsNullOrWhiteSpace(correlationId) && _options.AutoGenerate)
-        {
-            correlationId = GenerateCorrelationId();
         }
 
         if (!string.IsNullOrWhiteSpace(correlationId))
@@ -124,7 +77,7 @@ public class EnhancedCorrelationIdService : CorrelationIdService, IEnhancedCorre
                 TriggerType = "Queue",
                 Timestamp = DateTime.UtcNow,
                 Source = context.FunctionDefinition.Name,
-                AdditionalProperties = { ["QueueName"] = ExtractQueueName(context) }
+                AdditionalProperties = { ["QueueName"] = ExtractQueueName(context) ?? "Unknown" }
             });
         }
 
@@ -307,15 +260,19 @@ public class EnhancedCorrelationIdService : CorrelationIdService, IEnhancedCorre
 
     private string? ExtractFromHeaders(IEnumerable<KeyValuePair<string, IEnumerable<string>>> headers)
     {
+        var headerName = _options?.CorrelationIdHeader ?? "X-Correlation-Id";
         var header = headers.FirstOrDefault(h => 
-            string.Equals(h.Key, _options.HeaderName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(h.Key, headerName, StringComparison.OrdinalIgnoreCase));
         return header.Value?.FirstOrDefault();
     }
 
     private string? ExtractFromQueryParameters(Uri requestUri)
     {
-        var query = requestUri.Query;
+        var query = requestUri?.Query;
         if (string.IsNullOrEmpty(query)) return null;
+
+        var queryParameterName = _options?.Triggers?.Http?.QueryParameterName;
+        if (string.IsNullOrEmpty(queryParameterName)) return null;
 
         // Simple query parameter parsing (remove ? and split by &)
         var queryString = query.TrimStart('?');
@@ -325,7 +282,7 @@ public class EnhancedCorrelationIdService : CorrelationIdService, IEnhancedCorre
         {
             var keyValue = pair.Split('=');
             if (keyValue.Length == 2 && 
-                string.Equals(keyValue[0], _options.Triggers.Http.QueryParameterName, StringComparison.OrdinalIgnoreCase))
+                string.Equals(keyValue[0], queryParameterName, StringComparison.OrdinalIgnoreCase))
             {
                 return Uri.UnescapeDataString(keyValue[1]);
             }
@@ -441,16 +398,4 @@ public class EnhancedCorrelationIdService : CorrelationIdService, IEnhancedCorre
             return null;
         }
     }
-}
-
-/// <summary>
-/// Correlation context information
-/// </summary>
-public class CorrelationContext
-{
-    public string CorrelationId { get; set; } = string.Empty;
-    public string TriggerType { get; set; } = string.Empty;
-    public DateTime Timestamp { get; set; }
-    public string Source { get; set; } = string.Empty;
-    public Dictionary<string, object> AdditionalProperties { get; set; } = new();
 }

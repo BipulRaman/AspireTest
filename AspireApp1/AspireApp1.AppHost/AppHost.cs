@@ -9,4 +9,8 @@ builder.AddProject<Projects.AspireApp1_Web>("webfrontend")
     .WithReference(apiService)
     .WaitFor(apiService);
 
+var azFunction = builder.AddAzureFunctionsProject<Projects.AspireApp1_AzFunction>("aspireapp1-azfunction")
+    .WithEnvironment("ASPNETCORE_URLS", "http://localhost:7071")
+    .WithHttpHealthCheck("/api/health");
+
 builder.Build().Run();

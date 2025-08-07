@@ -61,7 +61,7 @@ var host = new HostBuilder()
             options.AddAdditionalHeadersToResponse = true;
 
             // Configure correlation ID header name (default: "X-Correlation-Id")
-            options.HeaderName = "X-Correlation-Id";
+            options.CorrelationIdHeader = "X-Correlation-Id";
 
             // Control auto-generation (default: true)
             options.AutoGenerate = true;
@@ -430,7 +430,7 @@ public class FlexibleFunction
 services.AddCorrelationId(options =>
 {
     // Global Configuration
-    options.HeaderName = "X-Correlation-Id";           // HTTP header name
+    options.CorrelationIdHeader = "X-Correlation-Id";           // HTTP header name
     options.AutoGenerate = true;                       // Generate if missing
     options.AddToResponseHeaders = true;               // Add to HTTP responses
     options.LogFunctionExecution = true;               // Log start/end
@@ -711,8 +711,54 @@ Logs:
 
 ## HTTP Client Integration
 
+### Automatic Header Propagation
+- **Configurable Correlation ID Header**: Uses the configured header name (default: `X-Correlation-Id`)
+  - If you set `options.CorrelationIdHeader = "X-Custom-Correlation-Id"`, all HTTP calls use that header
+- **Additional Headers**: Automatically propagates ALL captured additional headers to outgoing requests
+  - Headers like `X-User-Id`, `X-Event-Id`, `X-Tenant-Id` are automatically included
+- **Message Handler**: Intelligently adds headers only if not already present in the request
+- **Logging Integration**: Logs all HTTP requests/responses with full correlation context
+- **Error Handling**: Maintains correlation context even when HTTP calls fail
+- **Thread Safety**: Works correctly with async/await and parallel HTTP calls
+
+### Header Propagation Example with Custom Configuration
+```csharp
+// Program.cs - Custom header configuration
+var host = new HostBuilder()
+    .ConfigureFunctionsWorkerDefaults()
+    .ConfigureServices(services =>
+    {
+        services.AddCorrelationIdWithHttpClient(options =>
+        {
+            options.CorrelationIdHeader = "X-Custom-Correlation-Id";
+            options.AdditionalHeaders.AddRange(new[] { "X-User-Id", "X-Tenant-Id" });
+        });
+    })
+    .Build();
+```
+
+```
+Incoming HTTP Request: POST /api/ProcessOrder
+Headers: 
+  X-Custom-Correlation-Id: order123abc
+  X-User-Id: user789
+  X-Tenant-Id: tenant456
+
+Your Azure Function processes request and makes HTTP call:
+
+Outgoing HTTP Request: POST https://payment-service.com/api/process
+Headers automatically added:
+  X-Custom-Correlation-Id: order123abc    ← Custom correlation ID header
+  X-User-Id: user789                       ← Additional header propagated
+  X-Tenant-Id: tenant456                   ← Additional header propagated
+
+Payment service receives all context headers!
+```
+
+> **✅ HTTP Propagation Guarantee**: Both the custom correlation ID header name and all additional headers are automatically propagated to ALL outgoing HTTP client calls. The HTTP message handler respects your configuration and ensures complete header context flows through your distributed system.
+
 ### Automatic Correlation ID Propagation
-All HTTP clients automatically include the `X-Correlation-Id` header in outgoing requests:
+All HTTP clients automatically include the correlation ID header in outgoing requests:
 
 ```csharp
 public class OrderProcessor : CorrelatedHttpFunction

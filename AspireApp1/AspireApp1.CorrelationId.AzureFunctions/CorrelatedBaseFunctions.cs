@@ -1,5 +1,6 @@
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 
 namespace AspireApp1.CorrelationId.AzureFunctions;
 
@@ -75,11 +76,15 @@ public abstract class CorrelatedFunction
 /// </summary>
 public abstract class CorrelatedHttpFunction : CorrelatedFunction
 {
-    private const string CorrelationIdHeader = "X-Correlation-Id";
+    private readonly CorrelationIdOptions _options;
 
-    protected CorrelatedHttpFunction(ILogger logger, IEnhancedCorrelationIdService correlationIdService) 
+    protected CorrelatedHttpFunction(
+        ILogger logger, 
+        IEnhancedCorrelationIdService correlationIdService,
+        IOptions<CorrelationIdOptions> options) 
         : base(logger, correlationIdService)
     {
+        _options = options.Value;
     }
 
     /// <summary>
@@ -123,17 +128,20 @@ public abstract class CorrelatedHttpFunction : CorrelatedFunction
         var response = CreateResponse(request, statusCode);
         response.Headers.Add("Content-Type", "application/json");
         var json = System.Text.Json.JsonSerializer.Serialize(data);
-        using var writer = new System.IO.StreamWriter(response.Body);
-        await writer.WriteAsync(json);
+        
+        // Write JSON to response body using async operations
+        var jsonBytes = System.Text.Encoding.UTF8.GetBytes(json);
+        await response.Body.WriteAsync(jsonBytes, 0, jsonBytes.Length);
+        
         return response;
     }
 
     private void AddCorrelationIdToResponse(Microsoft.Azure.Functions.Worker.Http.HttpResponseData response)
     {
         // Add correlation ID to response if not already present
-        if (!response.Headers.Any(h => h.Key.Equals(CorrelationIdHeader, StringComparison.OrdinalIgnoreCase)))
+        if (!response.Headers.Any(h => h.Key.Equals(_options.CorrelationIdHeader, StringComparison.OrdinalIgnoreCase)))
         {
-            response.Headers.Add(CorrelationIdHeader, CorrelationIdService.CorrelationId);
+            response.Headers.Add(_options.CorrelationIdHeader, CorrelationIdService.CorrelationId);
         }
 
         // Add additional headers to response if configured
@@ -144,7 +152,7 @@ public abstract class CorrelatedHttpFunction : CorrelatedFunction
             foreach (var header in capturedHeaders)
             {
                 // Skip correlation ID header as it's already added above
-                if (!header.Key.Equals(CorrelationIdHeader, StringComparison.OrdinalIgnoreCase))
+                if (!header.Key.Equals(_options.CorrelationIdHeader, StringComparison.OrdinalIgnoreCase))
                 {
                     if (!response.Headers.Any(h => h.Key.Equals(header.Key, StringComparison.OrdinalIgnoreCase)))
                     {

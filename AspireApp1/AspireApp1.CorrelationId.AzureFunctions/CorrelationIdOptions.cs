@@ -8,7 +8,7 @@ public class CorrelationIdOptions
     /// <summary>
     /// Header name to use for HTTP triggers (default: X-Correlation-Id)
     /// </summary>
-    public string HeaderName { get; set; } = "X-Correlation-Id";
+    public string CorrelationIdHeader { get; set; } = "X-Correlation-Id";
 
     /// <summary>
     /// List of additional headers to capture and track alongside correlation ID
